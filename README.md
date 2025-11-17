@@ -36,6 +36,26 @@ A sophisticated Model Context Protocol (MCP) server that provides AI agents with
 
 ## 🚀 **Quick Start**
 
+### 🐳 **Docker Deployment (Recommended for Server-Side)**
+
+```bash
+# Clone the repository
+git clone https://github.com/graknol/ifs-cloud-core-mcp-server.git
+cd ifs-cloud-core-mcp-server
+
+# Build and run with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+**The server will be available at http://localhost:8000**
+
+See [DOCKER.md](DOCKER.md) for comprehensive Docker deployment guide.
+
+### 💻 **Local Installation**
+
 ### 1. **Installation**
 
 ```bash
@@ -64,8 +84,15 @@ uv run python -m src.ifs_cloud_mcp_server.main calculate-pagerank --version "25.
 ### 4. **Start the MCP Server**
 
 ```bash
-# Start server with analyzed version
+# Start server with stdio transport (for local MCP clients)
 uv run python -m src.ifs_cloud_mcp_server.main server --version "25.1.0"
+
+# Or start with HTTP transport (for server-side deployment)
+uv run python -m src.ifs_cloud_mcp_server.main server \
+  --version "25.1.0" \
+  --transport streamable-http \
+  --host 0.0.0.0 \
+  --port 8000
 ```
 
 ---

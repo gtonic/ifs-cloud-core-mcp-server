@@ -686,7 +686,12 @@ def handle_server_command(args) -> int:
         )
 
         # Try to run the server, handling asyncio context issues
-        server.run(transport_type=getattr(args, "transport", "stdio"))
+        transport_kwargs = {}
+        if args.transport in ["sse", "streamable-http"]:
+            transport_kwargs["host"] = args.host
+            transport_kwargs["port"] = args.port
+        
+        server.run(transport_type=args.transport, **transport_kwargs)
 
     except ValueError as e:
         logging.error(f"❌ Version error: {e}")
@@ -1268,7 +1273,21 @@ def main_sync():
         "--name", default="ifs-cloud-mcp-server", help="Server name"
     )
     server_parser.add_argument(
-        "--transport", default="stdio", help="Transport type (stdio, sse)"
+        "--transport", 
+        default="stdio", 
+        choices=["stdio", "sse", "streamable-http"],
+        help="Transport type (default: stdio)"
+    )
+    server_parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to for HTTP transports (default: 0.0.0.0)"
+    )
+    server_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind to for HTTP transports (default: 8000)"
     )
     server_parser.add_argument(
         "--log-level",

@@ -20,7 +20,7 @@ def test_search_config():
     print(f"✅ Fast hardware config: {fast_config}")
     assert fast_config.enable_faiss == True
     assert fast_config.enable_flashrank == True
-    assert fast_config.fetch_multiplier == 3
+    assert fast_config.fetch_multiplier == 4
     assert fast_config.preset_name == "fast_hardware"
 
     medium_config = SearchConfig.medium_hardware()
