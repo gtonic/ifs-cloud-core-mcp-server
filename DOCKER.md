@@ -4,6 +4,45 @@
 
 The IFS Cloud MCP Server can be deployed as a Docker container with HTTP streaming support, making it easy to run server-side for multiple clients to access.
 
+## Prerequisites
+
+Before running the Docker container, you need to:
+
+1. **Import IFS Cloud source files** into your local data directory
+2. **Generate search indexes** for the version you want to use
+
+### Option 1: Prepare Data on Host (Recommended)
+
+This is faster and more reliable:
+
+```bash
+# Import IFS Cloud ZIP file
+python -m src.ifs_cloud_mcp_server.main import /path/to/ifs-cloud-25.1.0.zip
+
+# Generate search indexes (this will take some time)
+python -m src.ifs_cloud_mcp_server.main download --version 25.1.0
+
+# Check the data directory location
+ls ~/.local/share/ifs_cloud_mcp_server/versions/25.1.0/
+# Should see: bm25s/, faiss/, ranked.jsonl, analysis/
+```
+
+### Option 2: Auto-Generate on Container Start
+
+Set `AUTO_GENERATE_INDEXES=true` to generate indexes automatically (slower, but convenient):
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -e VERSION=25.1.0 \
+  -e AUTO_GENERATE_INDEXES=true \
+  -v ifs-mcp-data:/home/mcp/.local/share/ifs_cloud_mcp_server \
+  --name ifs-mcp-server \
+  ifs-cloud-mcp-server:latest
+```
+
+⚠️ **Warning**: Auto-generation can take 30+ minutes for large IFS Cloud installations.
+
 ## Quick Start
 
 ### Using Docker Compose (Recommended)
@@ -25,10 +64,11 @@ docker-compose down
 # Build the image
 docker build -t ifs-cloud-mcp-server:latest .
 
-# Run the container
+# Run the container with mounted data directory
 docker run -d \
   -p 8000:8000 \
   -e VERSION=25.1.0 \
+  -v ~/.local/share/ifs_cloud_mcp_server:/home/mcp/.local/share/ifs_cloud_mcp_server \
   --name ifs-mcp-server \
   ifs-cloud-mcp-server:latest
 
@@ -44,12 +84,22 @@ docker stop ifs-mcp-server
 ### Environment Variables
 
 - `VERSION`: IFS Cloud version to use (default: `25.1.0`)
+- `AUTO_GENERATE_INDEXES`: Set to `true` to generate indexes on startup if missing (default: `false`)
 - `PYTHONUNBUFFERED`: Set to `1` for real-time logging
 
 ### Volume Mounts
 
-The server stores data in `/home/mcp/.local/share/ifs_cloud_mcp_server`. Mount a volume to persist data:
+**Important**: The server requires data in `/home/mcp/.local/share/ifs_cloud_mcp_server`.
 
+#### Mount host directory (recommended):
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -v ~/.local/share/ifs_cloud_mcp_server:/home/mcp/.local/share/ifs_cloud_mcp_server \
+  ifs-cloud-mcp-server:latest
+```
+
+#### Use Docker volume:
 ```bash
 docker run -d \
   -p 8000:8000 \

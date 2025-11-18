@@ -389,13 +389,109 @@ def handle_import_command(args) -> int:
         return 1
 
 
+def generate_indexes_locally(version: str, force: bool = False, max_files: int = None) -> bool:
+    """Generate search indexes locally by running analyze, pagerank, reindex, and embed commands.
+    
+    Args:
+        version: IFS Cloud version (e.g., '25.1.0')
+        force: Overwrite existing indexes if they exist
+        max_files: Optional limit on number of files to process
+        
+    Returns:
+        True if generation was successful, False otherwise
+    """
+    import sys
+    from argparse import Namespace
+    
+    try:
+        logging.info(f"🔄 Generating search indexes locally for version {version}...")
+        
+        # Step 1: Analyze
+        logging.info("\n" + "="*60)
+        logging.info("Step 1/4: Running analysis...")
+        logging.info("="*60)
+        analyze_args = Namespace(version=version, force=force, max_files=max_files, log_level="INFO")
+        result = handle_analyze_command(analyze_args)
+        if result != 0:
+            logging.error("❌ Analysis step failed")
+            return False
+        
+        # Step 2: Calculate PageRank
+        logging.info("\n" + "="*60)
+        logging.info("Step 2/4: Calculating PageRank...")
+        logging.info("="*60)
+        pagerank_args = Namespace(
+            version=version, 
+            damping_factor=0.85, 
+            max_iterations=100, 
+            convergence_threshold=1e-6,
+            log_level="INFO"
+        )
+        result = handle_pagerank_command(pagerank_args)
+        if result != 0:
+            logging.error("❌ PageRank calculation failed")
+            return False
+        
+        # Step 3: Reindex BM25S
+        logging.info("\n" + "="*60)
+        logging.info("Step 3/4: Building BM25S index...")
+        logging.info("="*60)
+        
+        # Get the ranked.jsonl file path
+        from .directory_utils import get_version_base_directory
+        version_base_dir = get_version_base_directory(version)
+        ranked_file = version_base_dir / "ranked.jsonl"
+        
+        reindex_args = Namespace(
+            version=version, 
+            analysis_file=str(ranked_file),
+            max_files=max_files,
+            log_level="INFO"
+        )
+        result = handle_bm25s_reindex_command(reindex_args)
+        if result != 0:
+            logging.error("❌ BM25S reindex failed")
+            return False
+        
+        # Step 4: Generate embeddings (FAISS)
+        logging.info("\n" + "="*60)
+        logging.info("Step 4/4: Generating embeddings...")
+        logging.info("="*60)
+        
+        # Use asyncio to run the embedding command
+        import asyncio
+        from .analysis_engine import run_embedding_command
+        
+        embed_args = Namespace(
+            version=version,
+            max_files=max_files,
+            log_level="INFO"
+        )
+        result = asyncio.run(run_embedding_command(embed_args))
+        if result != 0:
+            logging.error("❌ Embedding generation failed")
+            return False
+        
+        logging.info("\n" + "="*60)
+        logging.info("✅ All indexes generated successfully!")
+        logging.info("="*60)
+        return True
+        
+    except Exception as e:
+        logging.error(f"❌ Index generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def handle_download_command(args) -> int:
-    """Handle the download command - download pre-built indexes from GitHub."""
+    """Handle the download command - generate indexes locally (previously downloaded from GitHub)."""
     try:
         version = args.version
         force = getattr(args, "force", False)
+        max_files = getattr(args, "max_files", None)
 
-        logging.info(f"🔄 Starting download for version {version}...")
+        logging.info(f"🔄 Starting index generation for version {version}...")
 
         # Check if version directory exists
         from .directory_utils import get_version_base_directory
@@ -410,21 +506,21 @@ def handle_download_command(args) -> int:
             )
             return 1
 
-        # Attempt to download indexes
-        success = download_github_indexes(version, force=force)
+        # Generate indexes locally
+        success = generate_indexes_locally(version, force=force, max_files=max_files)
 
         if success:
             logging.info("")
-            logging.info(f"✅ Download completed successfully for version {version}!")
+            logging.info(f"✅ Index generation completed successfully for version {version}!")
             logging.info("    Ready to start MCP server:")
             logging.info(
                 f'    python -m src.ifs_cloud_mcp_server.main server --version "{version}"'
             )
             return 0
         else:
-            logging.error(f"❌ Download failed for version {version}")
+            logging.error(f"❌ Index generation failed for version {version}")
             logging.info("")
-            logging.info("    Alternative: Generate indexes locally:")
+            logging.info("    You can also run the steps manually:")
             logging.info(
                 f'    python -m src.ifs_cloud_mcp_server.main analyze --version "{version}"'
             )
@@ -673,7 +769,8 @@ def handle_server_command(args) -> int:
 
         if not (has_bm25s and has_pagerank):
             raise ValueError(
-                f"Version '{args.version}' found but missing search indexes. Please run: python -m src.ifs_cloud_mcp_server.main download --version {args.version}"
+                f"Version '{args.version}' found but missing search indexes. Please run: python -m src.ifs_cloud_mcp_server.main download --version {args.version}\n"
+                f"This will generate the indexes locally (analyze → pagerank → reindex-bm25s → embed)"
             )
 
         # Lazy import to avoid CLI slowdown
@@ -1220,15 +1317,20 @@ def main_sync():
     # Download command (synchronous) - Download pre-built indexes from GitHub
     download_parser = subparsers.add_parser(
         "download",
-        help="Download pre-built indexes from GitHub releases for faster setup",
+        help="Generate search indexes locally (analyze → pagerank → reindex-bm25s → embed)",
     )
     download_parser.add_argument(
         "--version",
         required=True,
-        help="IFS Cloud version to download indexes for (e.g., 25.1.0)",
+        help="IFS Cloud version to generate indexes for (e.g., 25.1.0)",
     )
     download_parser.add_argument(
         "--force", action="store_true", help="Overwrite existing indexes"
+    )
+    download_parser.add_argument(
+        "--max-files",
+        type=int,
+        help="Limit processing to top N files (for testing)",
     )
     download_parser.add_argument(
         "--log-level",

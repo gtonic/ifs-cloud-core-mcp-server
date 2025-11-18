@@ -50,6 +50,10 @@ COPY --from=builder /app/pyproject.toml ./
 COPY --from=builder /app/README.md ./
 COPY --from=builder /app/LICENSE ./
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Switch to non-root user
 USER mcp
 
@@ -64,7 +68,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import requests; requests.get('http://localhost:8000/health', timeout=5)" || exit 1
 
+# Use entrypoint script for validation and setup
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
 # Default command (can be overridden)
 # Usage: docker run -e VERSION=25.1.0 -p 8000:8000 ifs-cloud-mcp-server
-ENTRYPOINT ["python3", "-m", "ifs_cloud_mcp_server.main"]
-CMD ["server", "--version", "${VERSION:-25.1.0}", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "ifs_cloud_mcp_server.main", "server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
