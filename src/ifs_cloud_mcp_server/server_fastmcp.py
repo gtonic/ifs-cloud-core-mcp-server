@@ -657,13 +657,19 @@ The search engine is not initialized. This usually means:
         """Run the MCP server.
 
         Args:
-            transport_type: Transport type ("stdio", "sse", etc.)
-            **kwargs: Additional transport arguments
+            transport_type: Transport type ("stdio", "sse", "streamable-http")
+            **kwargs: Additional transport arguments (host, port for HTTP transports)
         """
         logger.info(f"Starting IFS Cloud MCP Server with {transport_type} transport")
 
         if transport_type == "stdio":
             self.mcp.run(transport="stdio")
+        elif transport_type in ["sse", "streamable-http"]:
+            # HTTP-based transports (SSE or streamable-http)
+            host = kwargs.pop("host", "0.0.0.0")
+            port = kwargs.pop("port", 8000)
+            logger.info(f"Starting HTTP server on {host}:{port}")
+            self.mcp.run(transport=transport_type, host=host, port=port, **kwargs)
         else:
             raise ValueError(f"Unsupported transport type: {transport_type}")
 

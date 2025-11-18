@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ifs-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ifs-cloud-mcp-server:latest
+    container_name: ifs-mcp-server
+    ports:
+      - "8000:8000"
+    environment:
+      - VERSION=${VERSION:-25.1.0}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Mount local data directory for persistence
+      - ifs-mcp-data:/home/mcp/.local/share/ifs_cloud_mcp_server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ifs-mcp-data:
+    driver: local
